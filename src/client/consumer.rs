@@ -303,6 +303,7 @@ impl Stream for StreamConsumer {
                     *this.next_offset = Some(used_offset);
 
                     // Sort records by offset in case they aren't in order
+                    // TODO: does it really need to be sorted ?
                     records_and_offsets.sort_by_key(|x| x.offset);
                     *this.last_high_watermark = watermark;
                     if let Some(x) = records_and_offsets.last() {
