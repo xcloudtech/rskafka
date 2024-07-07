@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use async_trait::async_trait;
 use std::ops::ControlFlow;
 use std::sync::Arc;
@@ -20,7 +21,8 @@ use crate::{
     throttle::maybe_throttle,
     validation::ExactlyOne,
 };
-
+use crate::protocol::messages::CreateTopicConfig;
+use crate::protocol::primitives::NullableString;
 use super::error::RequestContext;
 
 #[derive(Debug)]
@@ -63,7 +65,46 @@ impl ControllerClient {
             validate_only: None,
             tagged_fields: None,
         };
+        self.create_topic_with_request(request).await
+    }
 
+    pub async fn create_topic_with_configs(
+        &self,
+        name: impl Into<String> + Send,
+        num_partitions: i32,
+        replication_factor: i16,
+        configs: HashMap<impl Into<String>, Option<impl Into<String>>>,
+        timeout_ms: i32,
+    ) -> Result<()> {
+        let mut all_configs = Vec::with_capacity(configs.len());
+        for (k, v) in configs.into_iter() {
+            let val = v.map(|x| x.into());
+            let config = CreateTopicConfig{
+                name: String_(k.into()),
+                value: NullableString(val),
+                tagged_fields: None,
+            };
+            all_configs.push(config);
+        }
+        let request = &CreateTopicsRequest {
+            topics: vec![CreateTopicRequest {
+                name: String_(name.into()),
+                num_partitions: Int32(num_partitions),
+                replication_factor: Int16(replication_factor),
+                assignments: vec![],
+                configs: all_configs,
+                tagged_fields: None,
+            }],
+            timeout_ms: Int32(timeout_ms),
+            validate_only: None,
+            tagged_fields: None,
+        };
+        self.create_topic_with_request(request).await
+    }
+    pub async fn create_topic_with_request(
+        &self,
+        request: &CreateTopicsRequest,
+    ) -> Result<()> {
         maybe_retry(&self.backoff_config, self, "create_topic", || async move {
             let (broker, gen) = self
                 .get()
